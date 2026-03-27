@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NeuroScan AI — Tumor Detection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+
+<style>
+  :root {
+    --bg:        #05080f;
+    --surface:   #0c1220;
+    --surface2:  #111b2e;
+    --border:    rgba(99,179,255,.12);
+    --accent:    #3b82f6;
+    --accent2:   #06b6d4;
+    --danger:    #ef4444;
+    --safe:      #22c55e;
+    --text:      #e2e8f0;
+    --muted:     #64748b;
+    --font-head: 'Syne', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin:0; padding:0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── GRID NOISE BACKGROUND ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background-image:
+      linear-gradient(rgba(59,130,246,.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(59,130,246,.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+
+  /* ── AMBIENT GLOW ── */
+  .glow-orb {
+    position: fixed; border-radius: 50%;
+    filter: blur(120px); opacity: .18; pointer-events: none; z-index: 0;
+  }
+  .glow-orb.a { width:500px; height:500px; background:#3b82f6; top:-150px; left:-100px; animation: drift 12s ease-in-out infinite alternate; }
+  .glow-orb.b { width:400px; height:400px; background:#06b6d4; bottom:-100px; right:-80px; animation: drift 15s ease-in-out infinite alternate-reverse; }
+  @keyframes drift { from { transform: translate(0,0); } to { transform: translate(30px,40px); } }
+
+  /* ── LAYOUT ── */
+  .wrapper { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+  /* ── HEADER ── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1.5rem 2rem;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: rgba(12,18,32,.7);
+    backdrop-filter: blur(12px);
+    margin-bottom: 2.5rem;
+    animation: slideDown .6s cubic-bezier(.16,1,.3,1);
+  }
+  @keyframes slideDown { from { opacity:0; transform:translateY(-20px); } to { opacity:1; transform:none; } }
+
+  .logo {
+    display: flex; align-items: center; gap: .75rem;
+  }
+  .logo-icon {
+    width: 40px; height: 40px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem;
+  }
+  .logo-text { font-family: var(--font-head); font-weight: 800; font-size: 1.1rem; letter-spacing: -.02em; }
+  .logo-text span { color: var(--accent2); }
+
+  .badge {
+    font-size: .65rem; font-family: var(--font-mono);
+    padding: .3rem .7rem; border-radius: 100px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  /* ── HERO ── */
+  .hero { text-align: center; margin-bottom: 3rem; animation: fadeUp .7s .1s both cubic-bezier(.16,1,.3,1); }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:none; } }
+
+  .hero h1 {
+    font-family: var(--font-head); font-size: clamp(2rem, 5vw, 3.2rem);
+    font-weight: 800; letter-spacing: -.04em; line-height: 1.1;
+    margin-bottom: 1rem;
+  }
+  .hero h1 em {
+    font-style: normal;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .hero p { color: var(--muted); font-size: .9rem; max-width: 500px; margin: 0 auto; line-height: 1.7; }
+
+  /* ── MAIN CARD ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+    animation: fadeUp .7s .2s both cubic-bezier(.16,1,.3,1);
+    transition: border-color .3s;
+  }
+  .card:hover { border-color: rgba(99,179,255,.22); }
+
+  /* ── UPLOAD ZONE ── */
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: 14px;
+    padding: 3rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all .25s;
+    position: relative;
+    overflow: hidden;
+  }
+  .upload-zone:hover, .upload-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(59,130,246,.04);
+  }
+  .upload-zone input { position: absolute; inset:0; opacity:0; cursor:pointer; }
+
+  .upload-icon {
+    font-size: 2.5rem; margin-bottom: 1rem;
+    display: block;
+    animation: float 3s ease-in-out infinite;
+  }
+  @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+
+  .upload-zone h3 { font-family: var(--font-head); font-size: 1rem; font-weight: 600; margin-bottom: .4rem; }
+  .upload-zone p  { font-size: .78rem; color: var(--muted); }
+  .upload-zone .formats { margin-top: .75rem; }
+  .fmt-pill {
+    display: inline-block; font-size: .6rem; padding: .2rem .5rem;
+    border: 1px solid var(--border); border-radius: 4px; color: var(--muted);
+    margin: 2px; text-transform: uppercase; letter-spacing: .06em;
+  }
+
+  /* ── PREVIEW STRIP ── */
+  .preview-strip {
+    margin-top: 1.5rem;
+    display: none;
+    align-items: center; gap: 1rem;
+    padding: .75rem 1rem;
+    background: var(--surface2);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    animation: fadeUp .3s cubic-bezier(.16,1,.3,1);
+  }
+  .preview-strip.show { display: flex; }
+  .preview-thumb { width: 48px; height: 48px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+  .preview-info { flex: 1; }
+  .preview-name { font-size: .8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .preview-size { font-size: .7rem; color: var(--muted); }
+  .preview-clear {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 1.1rem; padding: .25rem; border-radius: 4px;
+    transition: color .2s;
+  }
+  .preview-clear:hover { color: var(--danger); }
+
+  /* ── ANALYSE BUTTON ── */
+  .btn-analyse {
+    width: 100%;
+    margin-top: 1.5rem;
+    padding: .95rem 2rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none; border-radius: 12px;
+    font-family: var(--font-head); font-size: 1rem; font-weight: 700;
+    color: #fff; cursor: pointer;
+    transition: opacity .2s, transform .15s;
+    letter-spacing: -.01em;
+    display: flex; align-items: center; justify-content: center; gap: .6rem;
+  }
+  .btn-analyse:hover:not(:disabled) { opacity: .9; transform: translateY(-1px); }
+  .btn-analyse:active:not(:disabled) { transform: translateY(0); }
+  .btn-analyse:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* ── SPINNER ── */
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid rgba(255,255,255,.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    display: none;
+  }
+  .spinner.show { display: block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── RESULTS ── */
+  #results { display: none; }
+  #results.show { display: block; animation: fadeUp .5s cubic-bezier(.16,1,.3,1); }
+
+  .verdict-banner {
+    padding: 1.25rem 1.5rem;
+    border-radius: 14px;
+    margin-bottom: 1.5rem;
+    display: flex; align-items: center; gap: 1rem;
+    border: 1px solid;
+  }
+  .verdict-banner.tumor {
+    background: rgba(239,68,68,.08);
+    border-color: rgba(239,68,68,.25);
+  }
+  .verdict-banner.clear {
+    background: rgba(34,197,94,.08);
+    border-color: rgba(34,197,94,.25);
+  }
+  .verdict-icon { font-size: 2rem; flex-shrink: 0; }
+  .verdict-label { font-family: var(--font-head); font-size: .65rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: .2rem; }
+  .verdict-name { font-family: var(--font-head); font-size: 1.4rem; font-weight: 800; }
+  .verdict-banner.tumor .verdict-name { color: var(--danger); }
+  .verdict-banner.clear .verdict-name  { color: var(--safe);  }
+
+  /* ── CONFIDENCE BARS ── */
+  .confidence-section { margin-bottom: 1.5rem; }
+  .conf-label { font-size: .72rem; color: var(--muted); margin-bottom: .75rem; text-transform: uppercase; letter-spacing: .08em; }
+  .conf-row { margin-bottom: .65rem; }
+  .conf-row-head { display: flex; justify-content: space-between; font-size: .78rem; margin-bottom: .3rem; }
+  .conf-bar-bg { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+  .conf-bar-fill {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    width: 0; transition: width 1s cubic-bezier(.16,1,.3,1);
+  }
+  .conf-bar-fill.danger { background: linear-gradient(90deg, #ef4444, #f97316); }
+
+  /* ── IMAGE PANELS ── */
+  .img-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 600px) { .img-grid { grid-template-columns: 1fr; } }
+
+  .img-panel {
+    border: 1px solid var(--border);
+    border-radius: 14px; overflow: hidden;
+    background: var(--surface2);
+  }
+  .img-panel-head {
+    padding: .6rem 1rem;
+    font-size: .65rem; text-transform: uppercase; letter-spacing: .1em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: .4rem;
+  }
+  .img-panel-head .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .img-panel img { width: 100%; display: block; }
+
+  /* ── DISCLAIMER ── */
+  .disclaimer {
+    margin-top: 2rem;
+    padding: 1rem 1.25rem;
+    border: 1px solid rgba(234,179,8,.15);
+    border-radius: 10px;
+    background: rgba(234,179,8,.04);
+    font-size: .72rem;
+    color: var(--muted);
+    line-height: 1.6;
+    display: flex; gap: .75rem; align-items: flex-start;
+  }
+  .disclaimer-icon { font-size: 1rem; flex-shrink: 0; margin-top: .1rem; }
+
+  /* ── STATUS BAR ── */
+  .status-bar {
+    margin-top: 2.5rem;
+    padding: .75rem 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: flex; gap: 2rem; flex-wrap: wrap;
+    font-size: .68rem; color: var(--muted);
+    animation: fadeUp .7s .35s both cubic-bezier(.16,1,.3,1);
+  }
+  .status-item { display: flex; align-items: center; gap: .5rem; }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--safe); animation: pulse-dot 2s infinite; }
+  @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  /* ── ERROR ── */
+  .error-toast {
+    display: none;
+    padding: .9rem 1.25rem;
+    border-radius: 10px;
+    background: rgba(239,68,68,.1);
+    border: 1px solid rgba(239,68,68,.25);
+    color: #fca5a5;
+    font-size: .8rem;
+    margin-top: 1rem;
+    animation: fadeUp .3s cubic-bezier(.16,1,.3,1);
+  }
+  .error-toast.show { display: block; }
+</style>
+</head>
+<body>
+
+<div class="glow-orb a"></div>
+<div class="glow-orb b"></div>
+
+<div class="wrapper">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🧠</div>
+      <div class="logo-text">Neuro<span>Scan</span> AI</div>
+    </div>
+    <div class="badge">Radiologist Interface v1.0</div>
+  </header>
+
+  <!-- HERO -->
+  <div class="hero">
+    <h1>Tumor Detection<br/>via <em>Deep Learning</em></h1>
+    <p>Upload X-ray or MRI scans. Our model highlights regions of interest using Grad-CAM activation maps for clinical review.</p>
+  </div>
+
+  <!-- UPLOAD CARD -->
+  <div class="card">
+    <div class="upload-zone" id="uploadZone">
+      <input type="file" id="fileInput" accept="image/*"/>
+      <span class="upload-icon">🩻</span>
+      <h3>Drop scan here or click to upload</h3>
+      <p>Supports X-ray, MRI (axial/coronal/sagittal)</p>
+      <div class="formats">
+        <span class="fmt-pill">PNG</span>
+        <span class="fmt-pill">JPG</span>
+        <span class="fmt-pill">JPEG</span>
+        <span class="fmt-pill">BMP</span>
+        <span class="fmt-pill">TIFF</span>
+      </div>
+    </div>
+
+    <div class="preview-strip" id="previewStrip">
+      <img class="preview-thumb" id="previewThumb" src="" alt=""/>
+      <div class="preview-info">
+        <div class="preview-name" id="previewName"></div>
+        <div class="preview-size" id="previewSize"></div>
+      </div>
+      <button class="preview-clear" id="clearBtn" title="Remove">✕</button>
+    </div>
+
+    <div class="error-toast" id="errorToast"></div>
+
+    <button class="btn-analyse" id="analyseBtn" disabled>
+      <div class="spinner" id="spinner"></div>
+      <span id="btnText">Analyse Scan</span>
+    </button>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results">
+    <div class="card">
+
+      <!-- VERDICT -->
+      <div class="verdict-banner" id="verdictBanner">
+        <div class="verdict-icon" id="verdictIcon"></div>
+        <div>
+          <div class="verdict-label">Prediction</div>
+          <div class="verdict-name" id="verdictName"></div>
+        </div>
+      </div>
+
+      <!-- CONFIDENCE -->
+      <div class="confidence-section">
+        <div class="conf-label">Confidence Distribution</div>
+        <div id="confBars"></div>
+      </div>
+
+      <!-- IMAGE PANELS -->
+      <div class="img-grid">
+        <div class="img-panel">
+          <div class="img-panel-head"><div class="dot"></div> Original Scan</div>
+          <img id="origImg" src="" alt="Original"/>
+        </div>
+        <div class="img-panel">
+          <div class="img-panel-head"><div class="dot" style="background:var(--danger)"></div> Grad-CAM Overlay</div>
+          <img id="overlayImg" src="" alt="Grad-CAM Overlay"/>
+        </div>
+      </div>
+
+      <!-- DISCLAIMER -->
+      <div class="disclaimer">
+        <span class="disclaimer-icon">⚠️</span>
+        <span>This tool is intended as a <strong>decision-support aid</strong> only and does not constitute a medical diagnosis. All results must be reviewed and confirmed by a qualified radiologist or medical professional before any clinical decision is made.</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- STATUS BAR -->
+  <div class="status-bar">
+    <div class="status-item"><div class="status-dot"></div> Model Online</div>
+    <div class="status-item">Architecture: ResNet-50</div>
+    <div class="status-item">Method: Grad-CAM</div>
+    <div class="status-item" id="deviceInfo">Device: —</div>
+  </div>
+
+</div><!-- /wrapper -->
+
+<script>
+const fileInput   = document.getElementById('fileInput');
+const uploadZone  = document.getElementById('uploadZone');
+const previewStrip= document.getElementById('previewStrip');
+const previewThumb= document.getElementById('previewThumb');
+const previewName = document.getElementById('previewName');
+const previewSize = document.getElementById('previewSize');
+const clearBtn    = document.getElementById('clearBtn');
+const analyseBtn  = document.getElementById('analyseBtn');
+const spinner     = document.getElementById('spinner');
+const btnText     = document.getElementById('btnText');
+const results     = document.getElementById('results');
+const errorToast  = document.getElementById('errorToast');
+
+let selectedFile = null;
+
+// ── HEALTH CHECK ──────────────────────────────────────────────────────────
+async function checkHealth() {
+  try {
+    const r = await fetch('/health');
+    const d = await r.json();
+    document.getElementById('deviceInfo').textContent = 'Device: ' + d.device;
+  } catch {}
+}
+checkHealth();
+
+// ── DRAG & DROP ───────────────────────────────────────────────────────────
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', ()  => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); uploadZone.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f) setFile(f);
+});
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) setFile(fileInput.files[0]);
+});
+
+clearBtn.addEventListener('click', clearFile);
+
+function setFile(f) {
+  selectedFile = f;
+  previewName.textContent = f.name;
+  previewSize.textContent = (f.size / 1024).toFixed(1) + ' KB';
+  const reader = new FileReader();
+  reader.onload = e => { previewThumb.src = e.target.result; };
+  reader.readAsDataURL(f);
+  previewStrip.classList.add('show');
+  analyseBtn.disabled = false;
+  results.classList.remove('show');
+  hideError();
+}
+
+function clearFile() {
+  selectedFile = null;
+  fileInput.value = '';
+  previewStrip.classList.remove('show');
+  analyseBtn.disabled = true;
+  results.classList.remove('show');
+}
+
+// ── ANALYSE ───────────────────────────────────────────────────────────────
+analyseBtn.addEventListener('click', async () => {
+  if (!selectedFile) return;
+  setLoading(true);
+  hideError();
+  results.classList.remove('show');
+
+  const fd = new FormData();
+  fd.append('image', selectedFile);
+
+  try {
+    const resp = await fetch('/predict', { method: 'POST', body: fd });
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error || 'Server error');
+    }
+    const data = await resp.json();
+    renderResults(data);
+  } catch (e) {
+    showError('⚠ ' + (e.message || 'Failed to connect to server. Is the Flask backend running?'));
+  } finally {
+    setLoading(false);
+  }
+});
+
+// ── RENDER RESULTS ────────────────────────────────────────────────────────
+function renderResults(data) {
+  const isTumor = data.is_tumor;
+
+  // Verdict
+  const banner = document.getElementById('verdictBanner');
+  banner.className = 'verdict-banner ' + (isTumor ? 'tumor' : 'clear');
+  document.getElementById('verdictIcon').textContent = isTumor ? '🔴' : '🟢';
+  document.getElementById('verdictName').textContent = data.prediction;
+
+  // Confidence bars
+  const barsEl = document.getElementById('confBars');
+  barsEl.innerHTML = '';
+  Object.entries(data.probabilities).forEach(([cls, pct]) => {
+    const isDanger = cls.toLowerCase().includes('tumor') || cls.toLowerCase().includes('malignant');
+    const row = document.createElement('div');
+    row.className = 'conf-row';
+    row.innerHTML = `
+      <div class="conf-row-head">
+        <span>${cls}</span>
+        <span>${pct.toFixed(1)}%</span>
+      </div>
+      <div class="conf-bar-bg">
+        <div class="conf-bar-fill ${isDanger ? 'danger' : ''}" style="width:0%" data-target="${pct}%"></div>
+      </div>`;
+    barsEl.appendChild(row);
+  });
+  // Animate bars after paint
+  requestAnimationFrame(() => {
+    document.querySelectorAll('.conf-bar-fill').forEach(el => {
+      el.style.width = el.dataset.target;
+    });
+  });
+
+  // Images
+  document.getElementById('origImg').src    = 'data:image/png;base64,' + data.original_image;
+  document.getElementById('overlayImg').src = 'data:image/png;base64,' + data.overlay_image;
+
+  results.classList.add('show');
+  results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── UTILS ─────────────────────────────────────────────────────────────────
+function setLoading(on) {
+  analyseBtn.disabled = on;
+  spinner.classList.toggle('show', on);
+  btnText.textContent = on ? 'Analysing…' : 'Analyse Scan';
+}
+function showError(msg) {
+  errorToast.textContent = msg; errorToast.classList.add('show');
+}
+function hideError() { errorToast.classList.remove('show'); }
+</script>
+</body>
+</html>
