@@ -161,7 +161,7 @@ def predict():
         "probabilities": {CLASS_NAMES[i]: float(round(probs[i] * 100, 2))
                           for i in range(NUM_CLASSES)},
         "original_image": orig_b64,
-        "overlay_image":  overlay_b64,
+        "overlay_image":  overlay_b64,dea
         "is_tumor":       bool(pred_idx != 3),   # notumor is index 2
     }
     return jsonify(response)
@@ -174,4 +174,6 @@ def health():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
+     
